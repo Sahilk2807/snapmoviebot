@@ -1,16 +1,39 @@
 import os
 import json
 import requests
+from flask import Flask
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from dotenv import load_dotenv
 
-# Your bot and GPLinks credentials
-BOT_TOKEN = "7538168447:AAF7SLFoJQdXv7C5vv2Wjhk9_petWTnzaT0"
-GPLINKS_API = "ebf67289ffbeb073bf5d0dd8a3c4b6d01fc16c71"
+# Load environment variables
+load_dotenv()
 
-# Load movie links from a JSON file
-with open("movies.json", "r") as f:
-    movie_data = json.load(f)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GPLINKS_API = os.getenv("GPLINKS_API")
+
+# Flask server for keep-alive
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "✅ SnapMovies Bot is alive!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Load movie data
+try:
+    with open("movies.json", "r") as f:
+        movie_data = json.load(f)
+except FileNotFoundError:
+    movie_data = {}
+    print("⚠️ 'movies.json' not found!")
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -38,11 +61,9 @@ async def movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         api_url = f"https://gplinks.in/api?api={GPLINKS_API}&url={original_url}"
         response = requests.get(api_url).json()
-        if response.get("status") == "success":
-            short_url = response["shortenedUrl"]
-        else:
-            short_url = original_url
-    except:
+        short_url = response.get("shortenedUrl", original_url)
+    except Exception as e:
+        print(f"Shorten error: {e}")
         short_url = original_url
 
     button = InlineKeyboardMarkup(
@@ -57,6 +78,7 @@ async def movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Start bot
 def main():
+    keep_alive()  # to prevent bot from sleeping
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("movie", movie))
