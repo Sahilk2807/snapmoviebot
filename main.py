@@ -37,7 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(message, parse_mode='Markdown')
 
-# /movie command (partial + case-insensitive matching)
+# /movie command (multi-match + case-insensitive)
 async def movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("❗ Use like this: `/movie joker`", parse_mode='Markdown')
@@ -52,34 +52,33 @@ async def movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except FileNotFoundError:
         movie_data = {}
 
-    matched_movie = None
-    for title, url in movie_data.items():
-        if search_query in title.lower():
-            matched_movie = (title, url)
-            break
+    # Collect all matches
+    matched_movies = [
+        (title, url) for title, url in movie_data.items()
+        if search_query in title.lower()
+    ]
 
-    if not matched_movie:
+    if not matched_movies:
         await update.message.reply_text("❌ Movie not found. Ask admin to add it.")
         return
 
-    movie_title, original_url = matched_movie
+    # Build inline buttons for each match
+    buttons = []
+    for title, url in matched_movies:
+        try:
+            api_url = f"https://gplinks.in/api?api={GPLINKS_API}&url={url}"
+            response = requests.get(api_url).json()
+            short_url = response.get("shortenedUrl", url)
+        except Exception as e:
+            print(f"Shorten error: {e}")
+            short_url = url
 
-    # Shorten URL
-    try:
-        api_url = f"https://gplinks.in/api?api={GPLINKS_API}&url={original_url}"
-        response = requests.get(api_url).json()
-        short_url = response.get("shortenedUrl", original_url)
-    except Exception as e:
-        print(f"Shorten error: {e}")
-        short_url = original_url
+        buttons.append([InlineKeyboardButton(f"📥 {title.title()}", url=short_url)])
 
-    button = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📥 Download Link", url=short_url)]]
-    )
-
+    reply_markup = InlineKeyboardMarkup(buttons)
     await update.message.reply_text(
-        f"🎬 *{movie_title.title()}* is ready to download:",
-        reply_markup=button,
+        f"🎬 Found {len(matched_movies)} result(s) for *{search_query}*:",
+        reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
