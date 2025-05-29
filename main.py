@@ -27,14 +27,6 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# Load movie data
-try:
-    with open("movies.json", "r") as f:
-        movie_data = json.load(f)
-except FileNotFoundError:
-    movie_data = {}
-    print("⚠️ 'movies.json' not found!")
-
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = (
@@ -51,13 +43,23 @@ async def movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     movie_name = " ".join(context.args).lower()
+
+    # 🔄 Reload movie data from JSON each time
+    try:
+        with open("movies.json", "r") as f:
+            movie_data = json.load(f)
+    except FileNotFoundError:
+        movie_data = {}
+        await update.message.reply_text("⚠️ Movie database not found.")
+        return
+
     original_url = movie_data.get(movie_name)
 
     if not original_url:
         await update.message.reply_text("❌ Movie not found. Ask admin to add it.")
         return
 
-    # Shorten using GPLinks
+    # 🔗 Shorten using GPLinks
     try:
         api_url = f"https://gplinks.in/api?api={GPLINKS_API}&url={original_url}"
         response = requests.get(api_url).json()
@@ -78,7 +80,7 @@ async def movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Start bot
 def main():
-    keep_alive()  # to prevent bot from sleeping
+    keep_alive()  # Keep the bot alive
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("movie", movie))
